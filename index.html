@@ -456,7 +456,7 @@ sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + 
     return segs.flat();
   },
 
-  start(){clearTimeout(this._oct);this._oct=null;this.okAt=0;this.pc=pickPc(this.id,this.pc);this.route=this.makeRoute(this.pc);this.idx=0;this.found=[];this.err=0;this.ghost=[];this.state='run';
+  start(){clearTimeout(this._oct);clearTimeout(this._ring);this._oct=null;this.okAt=performance.now();this.prevM=null;this.pc=pickPc(this.id,this.pc);this.route=this.makeRoute(this.pc);this.idx=0;this.found=[];this.err=0;this.ghost=[];this.state='run';
     ui.timer.start();this.render();
     const f0=this.route[0];ui.status(Mic.on?`Listening. Start on the ${STRING_FULL[f0.s]} string.`:`Mic is off. Turn it on, or tap ${SHARP[this.pc]} on the ${STRING_FULL[f0.s]} string to simulate.`);},
   render(){
@@ -468,17 +468,26 @@ sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + 
       :'<button class="btn" data-act="start" type="button">Skip to another note</button>';
     ui.controls(btn+(Mic.on?'':' <button class="btn" data-act="mic" type="button">Turn on mic</button>'));
     board.set({dots:[...this.found.map(p=>({...p,kind:'found',label:SHARP[this.pc]})),...this.ghost],lines:this.state==='done'?octaveLinks(this.found):[]});},
-  /* The mic can briefly read a note an octave off while a string is being plucked, or while the previous note still rings.
-     So a right-note-wrong-octave reading from the mic is only counted if the right octave does not follow within 0.7 s,
-     and it is ignored entirely in the first 0.6 s after a position is accepted. Taps on the board are judged at once. */
+  /* How mic readings are judged:
+     - every position needs its own pluck: a reading of the target counts only if a new pluck was heard after the last accepted
+       position (otherwise it is the previous string ringing, often heard an octave off)
+     - a reading equal to the previous position is that string still ringing: never a mistake
+     - readings more than 0.6 s after the latest pluck are ringing, not playing: never a mistake
+     - right note, wrong octave counts only if the right octave does not follow within 0.7 s
+     Taps on the board are judged at once. */
   onNote(m,fromMic=true){if(this.state!=='run')return;const want=this.route[this.idx],wm=midiAt(want.s,want.f);
-    if(m===wm){clearTimeout(this._oct);this._oct=null;this.found.push(want);this.idx++;this.ghost=[];this.okAt=performance.now();
+    if(m===wm&&(!fromMic||Mic.onsetAt>this.okAt)){clearTimeout(this._oct);this._oct=null;clearTimeout(this._ring);
+      this.found.push(want);this.idx++;this.ghost=[];this.okAt=performance.now();this.prevM=wm;
       if(this.idx===this.route.length)return this.finish();this.render();
       const nx=this.route[this.idx];ui.status(`Got it: ${STRING_FULL[want.s]} string, fret ${want.f}. Next: the ${STRING_FULL[nx.s]} string.`,'hit');return;}
-    if(m%12===this.pc&&fromMic){
-      if(performance.now()-(this.okAt||0)<600)return;
-      if(!this._oct){const idx=this.idx;this._oct=setTimeout(()=>{this._oct=null;if(this.state==='run'&&this.idx===idx)this.wrong(m,want,wm);},700);}
-      return;}
+    if(fromMic){
+      if(m===wm)return;
+      if(m===this.prevM){if(Mic.onsetAt>this.okAt){clearTimeout(this._ring);const idx=this.idx;
+          this._ring=setTimeout(()=>{if(this.state==='run'&&this.idx===idx)ui.status(`Still hearing ${noteName(m)} from the last string. Mute it and pluck the ${STRING_FULL[want.s]} string again.`);},1200);}
+        return;}
+      if(performance.now()-Mic.onsetAt>600)return;
+      if(m%12===this.pc){if(!this._oct){const idx=this.idx;this._oct=setTimeout(()=>{this._oct=null;if(this.state==='run'&&this.idx===idx)this.wrong(m,want,wm);},700);}return;}
+    }
     this.wrong(m,want,wm);},
   wrong(m,want,wm){this.err++;this.ghost=positionsOfMidi(m).map(p=>({...p,kind:'live'}));this.render();
     clearTimeout(this._g);this._g=setTimeout(()=>{this.ghost=[];if(this.state==='run')this.render();},1400);
@@ -531,41 +540,62 @@ function renderStats(){
 
 /* ---------- Microphone + pitch detection (YIN) ---------- */
 const gateFromSlider=v=>0.05*Math.pow(0.06,v/100);   // slider 0 = least sensitive, 100 = most
-function detectPitch(buf,sr,gate){
-  let rms=0;for(let i=0;i<buf.length;i++)rms+=buf[i]*buf[i];rms=Math.sqrt(rms/buf.length);
-  if(rms<gate)return{rms};
-  const tauMin=Math.floor(sr/1400),tauMax=Math.min(Math.floor(sr/70),(buf.length>>1)-1),W=buf.length-tauMax;
-  const d=new Float32Array(tauMax+2);
-  for(let tau=1;tau<=tauMax+1;tau++){let s=0;for(let i=0;i<W;i++){const x=buf[i]-buf[i+tau];s+=x*x;}d[tau]=s;}
-  let run=0;d[0]=1;for(let tau=1;tau<=tauMax+1;tau++){run+=d[tau];d[tau]=run?d[tau]*tau/run:1;}
-  let tau=-1;for(let t=tauMin;t<=tauMax;t++){if(d[t]<0.15){while(t+1<=tauMax&&d[t+1]<d[t])t++;tau=t;break;}}
-  if(tau<1)return{rms};
-  const a=d[tau-1],b=d[tau],c=d[tau+1],den=a+c-2*b,shift=den?(a-c)/(2*den):0;
-  return{rms,freq:sr/(tau+shift)};
-}
-const Mic={on:false,hist:[],last:null,silent:0,prevRms:0,tick:0,
+/* ---- Pitch engine: McLeod pitch method on a 2x-decimated window, onset detection, attack skip ---- */
+function makeEngine(){
+  const E={onsetAt:-1e9,last:null,hist:[],hfHist:[],lastOnset:-1e9,silent:0,
+  mpm(x,sr){const M=x.length,tauMin=Math.floor(sr/1000),tauMax=Math.min(Math.floor(sr/70),M>>1);
+    const n=new Float32Array(tauMax+2);let m=0;for(let i=0;i<M;i++)m+=2*x[i]*x[i];
+    for(let tau=0;tau<=tauMax+1;tau++){let r=0;for(let i=0;i<M-tau;i++)r+=x[i]*x[i+tau];n[tau]=m>0?2*r/m:0;m-=x[tau]*x[tau]+x[M-1-tau]*x[M-1-tau];}
+    let t=1;while(t<=tauMax&&n[t]>0)t++;            // skip the zero-lag lobe
+    const peaks=[];let best=-1,bi=-1;
+    for(;t<=tauMax;t++){if(n[t]>0){if(n[t]>best){best=n[t];bi=t;}}else if(bi>0){peaks.push(bi);best=-1;bi=-1;}}
+    if(bi>0)peaks.push(bi);
+    const P=peaks.filter(p=>p>=tauMin);if(!P.length)return null;
+    const top=Math.max(...P.map(p=>n[p]));if(top<0.6)return null;
+    const pk=P.find(p=>n[p]>=0.9*top);
+    const a=n[pk-1],b=n[pk],c=n[pk+1],den=a+c-2*b,sh=den?(a-c)/(2*den):0;
+    return{freq:sr/(pk+sh),clarity:b};},
+  /* buf: newest samples at the end. t: ms. returns {rms, midi?, cents?, onset, note?} */
+  frame(buf,sr,gate,t){
+    const N=buf.length;let rms=0;for(let i=N-2048;i<N;i++)rms+=buf[i]*buf[i];rms=Math.sqrt(rms/2048);
+    let hf=0;for(let i=N-1024;i<N;i++){const d=buf[i]-buf[i-1];hf+=d*d;}hf=Math.sqrt(hf/1024);
+    const prevMin=this.hfHist.length?Math.min(...this.hfHist):0;
+    this.hfHist.push(hf);if(this.hfHist.length>6)this.hfHist.shift();
+    const out={rms,onset:false};
+    if(rms>gate*1.2&&hf>prevMin*1.9&&t-this.lastOnset>120){this.lastOnset=this.onsetAt=t;this.hist=[];this.last=null;out.onset=true;}
+    if(rms<gate){this.hist=[];if(++this.silent>8)this.last=null;return out;}
+    this.silent=0;
+    if(t-this.onsetAt<45)return out;                 // let the pick attack pass
+    const M=2048,x=new Float32Array(M);let mean=0;
+    for(let j=0;j<M;j++){const i=N-2*M+2*j;x[j]=(buf[i-1>=0?i-1:i]+2*buf[i]+buf[i+1])*0.25;mean+=x[j];}
+    mean/=M;for(let j=0;j<M;j++)x[j]-=mean;
+    const r=this.mpm(x,sr/2);if(!r){this.hist=[];return out;}
+    const mf=69+12*Math.log2(r.freq/440),m=Math.round(mf);out.midi=m;out.cents=(mf-m)*100;
+    if(m<38||m>91){this.hist=[];return out;}
+    this.hist.push(m);if(this.hist.length>3)this.hist.shift();
+    if(this.hist.length===3&&this.hist.every(v=>v===m)&&m!==this.last){
+      this.last=m;out.note=m;}
+    return out;}
+  };return E;}
+/* Microphone: every animation frame, read the newest 4096 samples and run them through the engine */
+const Mic={on:false,eng:makeEngine(),
+  get onsetAt(){return this.eng.onsetAt;},
   async start(){
     try{
       if(!navigator.mediaDevices?.getUserMedia)throw Object.assign(new Error('x'),{name:'NoMedia'});
       this.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
       this.ctx=new (window.AudioContext||window.webkitAudioContext)();
-      const src=this.ctx.createMediaStreamSource(this.stream);this.an=this.ctx.createAnalyser();this.an.fftSize=2048;src.connect(this.an);
-      this.buf=new Float32Array(2048);this.on=true;this.hist=[];this.last=null;this.loop();micUI();ex.onMic?.();
+      const src=this.ctx.createMediaStreamSource(this.stream);this.an=this.ctx.createAnalyser();this.an.fftSize=4096;src.connect(this.an);
+      this.buf=new Float32Array(4096);this.eng=makeEngine();this.on=true;this.loop();micUI();ex.onMic?.();
     }catch(e){micUI(e);}
   },
   stop(){this.on=false;try{this.stream.getTracks().forEach(t=>t.stop());this.ctx.close();}catch(e){}micUI();ex.onMic?.();},
-  loop(){if(!this.on)return;requestAnimationFrame(()=>this.loop());if((this.tick=(this.tick+1)%2))return;
-    this.an.getFloatTimeDomainData(this.buf);this.frame(detectPitch(this.buf,this.ctx.sampleRate,gateFromSlider(settings.gate)));},
-  frame(r){
+  loop(){if(!this.on)return;requestAnimationFrame(()=>this.loop());
+    this.an.getFloatTimeDomainData(this.buf);
+    const r=this.eng.frame(this.buf,this.ctx.sampleRate,gateFromSlider(settings.gate),performance.now());
     $('mLevel').style.width=Math.min(100,r.rms*600)+'%';
-    if(r.rms>this.prevRms*1.7&&r.rms>gateFromSlider(settings.gate)*2){this.last=null;this.hist=[];}  // new pluck
-    this.prevRms=r.rms;
-    if(!r.freq){this.hist=[];if(++this.silent>6)this.last=null;return;}
-    const mf=69+12*Math.log2(r.freq/440),m=Math.round(mf);
-    if(m<38||m>91){this.hist=[];return;}
-    this.silent=0;$('mNote').textContent=noteName(m);$('mCents').style.left=(50+(mf-m)*90)+'%';
-    this.hist.push(m);if(this.hist.length>4)this.hist.shift();
-    if(this.hist.length===4&&this.hist.every(x=>x===m)&&m!==this.last){this.last=m;ex.onNote?.(m);}
+    if(r.midi!=null&&r.midi>=38&&r.midi<=91){$('mNote').textContent=noteName(r.midi);$('mCents').style.left=(50+r.cents*0.9)+'%';}
+    if(r.note!=null)ex.onNote?.(r.note);
   }
 };
 function micUI(err){
