@@ -433,7 +433,7 @@ nameit:{id:'nameit',title:'Name the note',short:'Name it',tag:'On screen',
     const i=SHARP.indexOf(e.key.toUpperCase());if(i>=0)this.answer(i);}
 },
 sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + mic',
-  blurb:'Play the note along two octave chains, each climbing with the skip-one-string shape: one starting on the low E string, one on the A string, lowest chain first. If the note’s first instance is an open D, G or B string, start there and follow the shape up from it first. The mic hears pitch, not which string you used, so the app assumes this path. No mic? Tap the board to stand in for the guitar. The neck runs to fret 16 here so every chain fits.',
+  blurb:'Play the note along octave chains that climb with the skip-one-string shape (low E → D → B and A → G → high e). The route always starts on the note closest to the headstock and works its way up the neck. The mic hears pitch, not which string you used, so the app assumes this path. No mic? Tap the board to stand in for the guitar. The neck runs to fret 16 here so every chain fits.',
   frets:16,
   state:'ready',
   mount(){this.ready();},
@@ -443,12 +443,19 @@ sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + 
      Then two octave chains using the skip-one-string shape, the one with the lower starting fret first:
      low E f -> D f+2 -> B f+5   and   A g -> G g+2 -> high e g+5   (start frets 0-11, so the neck runs to 16) */
   makeRoute(pc){
-    const chain=(base,steps)=>{for(let f=0;f<=11;f++)if(midiAt(base,f)%12===pc)return steps.map(([s,d])=>({s,f:f+d}));};
-    const chains=[chain(5,[[5,0],[3,2],[1,5]]),chain(4,[[4,0],[2,2],[0,5]])].sort((x,y)=>x[0].f-y[0].f);
-    const open=[3,2,1].find(s=>OPEN[s]%12===pc);
-    const openChain={3:[{s:3,f:0},{s:1,f:3}],2:[{s:2,f:0},{s:0,f:3}],1:[{s:1,f:0}]}[open]||[];
-    return [...openChain,...chains.flat()];
+    /* Two octave chains climb with the skip-one-string shape: low E -> D (+2) -> B (+5) and A -> G (+2) -> high e (+5).
+       Each chain appears once in full (start fret 0-11) plus the tail of the octave below it where that tail is on the neck
+       (for C that is B1, for D it is D0 -> B3). Segments are played left to right by their first fret, thicker string first on a tie,
+       so every route starts on the note closest to the headstock. */
+    const CH=[[[5,0],[3,2],[1,5]],[[4,0],[2,2],[0,5]]],segs=[];
+    for(const steps of CH){const base=steps[0][0];let f=0;while(midiAt(base,f)%12!==pc)f++;
+      for(const start of [f-12,f]){const seg=steps.map(([s,d])=>({s,f:start+d})).filter(p=>p.f>=0);if(!seg.length)continue;
+        if(start<0&&seg.length===1&&seg[0].s===0)continue; /* a lone low high-e (E, F, F#) is left out: the high e comes later in the route */
+        segs.push(seg);}}
+    segs.sort((x,y)=>x[0].f-y[0].f||y[0].s-x[0].s);
+    return segs.flat();
   },
+
   start(){this.pc=pickPc(this.id,this.pc);this.route=this.makeRoute(this.pc);this.idx=0;this.found=[];this.err=0;this.ghost=[];this.state='run';
     ui.timer.start();this.render();
     const f0=this.route[0];ui.status(Mic.on?`Listening. Start on the ${STRING_FULL[f0.s]} string.`:`Mic is off. Turn it on, or tap ${SHARP[this.pc]} on the ${STRING_FULL[f0.s]} string to simulate.`);},
