@@ -228,7 +228,7 @@ html.pl .about{display:grid;grid-column:1/-1}
       <section class="panel">
         <h3>Settings</h3>
         <div class="set-row"><label for="setFrets">Frets shown</label>
-          <select id="setFrets"><option value="12">0 – 12</option><option value="15">0 – 15</option></select></div>
+          <select id="setFrets"><option value="16">0 – 16</option><option value="12">0 – 12</option></select></div>
         <label class="tog" for="setNat"><input type="checkbox" id="setNat"> Natural notes only in drills</label>
         <label class="tog" for="setLefty"><input type="checkbox" id="setLefty"> Left-handed view</label>
         <div class="set-row"><span class="small" id="resetMsg">Times are kept in this browser.</span>
@@ -277,7 +277,9 @@ function octaveLinks(pos){
 const KEY='fretlab.v1';
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return {}}}
 const saved=load();
-const settings=Object.assign({frets:12,naturals:true,lefty:false,gate:35,order:'up',autoNext:true},saved.settings||{});
+const settings=Object.assign({frets:16,naturals:true,lefty:false,gate:35,order:'up',autoNext:true},saved.settings||{});
+/* v2: the neck runs to fret 16 everywhere so every octave chain is complete (e.g. F ends on e13) */
+if(settings.v!==2){settings.frets=16;settings.v=2;}
 let stats=saved.stats||{};
 function persist(){try{localStorage.setItem(KEY,JSON.stringify({settings,stats,last:{ch:chapter.id,ex:ex.id}}))}catch(e){}}
 function record(exId,pc,t,e){const a=((stats[exId]??={})[pc]??=[]);a.push({t:Math.round(t),e,d:Date.now()});if(a.length>20)a.shift();persist();renderStats();}
