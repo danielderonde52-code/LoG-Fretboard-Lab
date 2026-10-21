@@ -277,7 +277,7 @@ function octaveLinks(pos){
 const KEY='fretlab.v1';
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return {}}}
 const saved=load();
-const settings=Object.assign({frets:12,naturals:true,lefty:false,gate:35,order:'up'},saved.settings||{});
+const settings=Object.assign({frets:12,naturals:true,lefty:false,gate:35,order:'up',autoNext:true},saved.settings||{});
 let stats=saved.stats||{};
 function persist(){try{localStorage.setItem(KEY,JSON.stringify({settings,stats,last:{ch:chapter.id,ex:ex.id}}))}catch(e){}}
 function record(exId,pc,t,e){const a=((stats[exId]??={})[pc]??=[]);a.push({t:Math.round(t),e,d:Date.now()});if(a.length>20)a.shift();persist();renderStats();}
@@ -436,7 +436,7 @@ sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + 
   blurb:'Play the note along octave chains that climb with the skip-one-string shape (low E → D → B and A → G → high e). The route always starts on the note closest to the headstock and works its way up the neck. The mic hears pitch, not which string you used, so the app assumes this path. No mic? Tap the board to stand in for the guitar. The neck runs to fret 16 here so every chain fits.',
   frets:16,
   state:'ready',
-  mount(){this.ready();},
+  mount(){this.cancelAuto();this.ready();},
   ready(){this.state='ready';this.found=[];this.ghost=[];this.route=[];this.idx=0;ui.timer.reset();this.render();
     ui.status('Press Start or the space bar when you are ready.');},
   /* The route: if the note's first instance is an open D, G or B string, start there and follow the shape up (open D -> B3, open G -> e3).
@@ -466,7 +466,8 @@ sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + 
     const btn=this.state==='ready'?'<button class="btn primary" data-act="start" type="button">Start</button>'
       :this.state==='done'?'<button class="btn primary" data-act="start" type="button">Start next note</button>'
       :'<button class="btn" data-act="start" type="button">Skip to another note</button>';
-    ui.controls(btn+(Mic.on?'':' <button class="btn" data-act="mic" type="button">Turn on mic</button>'));
+    ui.controls(btn+(Mic.on?'':' <button class="btn" data-act="mic" type="button">Turn on mic</button>')+
+      `<label class="tog" for="autoNext"><input type="checkbox" id="autoNext" data-act="auto" ${settings.autoNext?'checked':''}> <span class="long">Start the next note automatically</span><span class="short">Auto next</span></label>`);
     board.set({dots:[...this.found.map(p=>({...p,kind:'found',label:SHARP[this.pc]})),...this.ghost],lines:this.state==='done'?octaveLinks(this.found):[]});},
   /* How mic readings are judged:
      - every position needs its own pluck: a reading of the target counts only if a new pluck was heard after the last accepted
@@ -496,9 +497,18 @@ sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + 
     else ui.status(`Heard ${noteName(m)}. Looking for ${SHARP[this.pc]} on the ${STRING_FULL[want.s]} string.`,'miss');},
   onTap(s,f){if(this.state==='ready'){ui.status('Press Start first.');return;}this.onNote(midiAt(s,f),false);},
   finish(){this.state='done';const t=ui.timer.stop();record(this.id,this.pc,t,this.err);this.render();
-    ui.status(`All ${this.route.length} positions in ${fmt(t)}${this.err?` · ${this.err} wrong note${this.err>1?'s':''}`:' · clean'}. Press space when you are ready for the next note.`,'hit');},
-  onAction(a,el){if(a==='start')this.start();if(a==='mic')Mic.start();},
-  onKey(e){if((e.key===' '||e.key==='Enter')&&this.state!=='run'){e.preventDefault();this.start();}},
+    this.result=`All ${this.route.length} positions in ${fmt(t)}${this.err?` · ${this.err} wrong note${this.err>1?'s':''}`:' · clean'}.`;
+    if(settings.autoNext)this.countdown();else ui.status(this.result+' Press space when you are ready for the next note.','hit');},
+  /* After a finished note, show the result for 4 seconds, then start the next note on its own */
+  countdown(){this.cancelAuto();let n=4;const tick=()=>{if(this.state!=='done'||ex!==this){this.cancelAuto();return;}
+      if(n===0){this.cancelAuto();this.start();return;}
+      ui.status(`${this.result} Next note in ${n}…`,'hit');n--;};
+    tick();this._auto=setInterval(tick,1000);},
+  cancelAuto(){clearInterval(this._auto);this._auto=null;},
+  onAction(a,el){if(a==='start'){this.cancelAuto();this.start();}if(a==='mic')Mic.start();
+    if(a==='auto'){settings.autoNext=el.checked;persist();
+      if(this.state==='done'){if(el.checked)this.countdown();else{this.cancelAuto();ui.status(this.result+' Press space when you are ready for the next note.','hit');}}}},
+  onKey(e){if((e.key===' '||e.key==='Enter')&&this.state!=='run'){e.preventDefault();this.cancelAuto();this.start();}},
   onMic(){this.render();}
 }
 };
