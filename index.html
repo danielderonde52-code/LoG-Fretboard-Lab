@@ -456,7 +456,7 @@ sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + 
     return segs.flat();
   },
 
-  start(){this.pc=pickPc(this.id,this.pc);this.route=this.makeRoute(this.pc);this.idx=0;this.found=[];this.err=0;this.ghost=[];this.state='run';
+  start(){clearTimeout(this._oct);this._oct=null;this.okAt=0;this.pc=pickPc(this.id,this.pc);this.route=this.makeRoute(this.pc);this.idx=0;this.found=[];this.err=0;this.ghost=[];this.state='run';
     ui.timer.start();this.render();
     const f0=this.route[0];ui.status(Mic.on?`Listening. Start on the ${STRING_FULL[f0.s]} string.`:`Mic is off. Turn it on, or tap ${SHARP[this.pc]} on the ${STRING_FULL[f0.s]} string to simulate.`);},
   render(){
@@ -468,16 +468,24 @@ sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + 
       :'<button class="btn" data-act="start" type="button">Skip to another note</button>';
     ui.controls(btn+(Mic.on?'':' <button class="btn" data-act="mic" type="button">Turn on mic</button>'));
     board.set({dots:[...this.found.map(p=>({...p,kind:'found',label:SHARP[this.pc]})),...this.ghost],lines:this.state==='done'?octaveLinks(this.found):[]});},
-  onNote(m){if(this.state!=='run')return;const want=this.route[this.idx],wm=midiAt(want.s,want.f);
-    if(m===wm){this.found.push(want);this.idx++;this.ghost=[];
+  /* The mic can briefly read a note an octave off while a string is being plucked, or while the previous note still rings.
+     So a right-note-wrong-octave reading from the mic is only counted if the right octave does not follow within 0.7 s,
+     and it is ignored entirely in the first 0.6 s after a position is accepted. Taps on the board are judged at once. */
+  onNote(m,fromMic=true){if(this.state!=='run')return;const want=this.route[this.idx],wm=midiAt(want.s,want.f);
+    if(m===wm){clearTimeout(this._oct);this._oct=null;this.found.push(want);this.idx++;this.ghost=[];this.okAt=performance.now();
       if(this.idx===this.route.length)return this.finish();this.render();
       const nx=this.route[this.idx];ui.status(`Got it: ${STRING_FULL[want.s]} string, fret ${want.f}. Next: the ${STRING_FULL[nx.s]} string.`,'hit');return;}
-    this.err++;this.ghost=positionsOfMidi(m).map(p=>({...p,kind:'live'}));this.render();
+    if(m%12===this.pc&&fromMic){
+      if(performance.now()-(this.okAt||0)<600)return;
+      if(!this._oct){const idx=this.idx;this._oct=setTimeout(()=>{this._oct=null;if(this.state==='run'&&this.idx===idx)this.wrong(m,want,wm);},700);}
+      return;}
+    this.wrong(m,want,wm);},
+  wrong(m,want,wm){this.err++;this.ghost=positionsOfMidi(m).map(p=>({...p,kind:'live'}));this.render();
     clearTimeout(this._g);this._g=setTimeout(()=>{this.ghost=[];if(this.state==='run')this.render();},1400);
     if(m%12===this.pc){const o=Math.round((wm-m)/12);
       ui.status(`Right note, wrong octave. The one on the ${STRING_FULL[want.s]} string is ${Math.abs(o)} octave${Math.abs(o)>1?'s':''} ${o>0?'higher':'lower'}.`,'miss');}
     else ui.status(`Heard ${noteName(m)}. Looking for ${SHARP[this.pc]} on the ${STRING_FULL[want.s]} string.`,'miss');},
-  onTap(s,f){if(this.state==='ready'){ui.status('Press Start first.');return;}this.onNote(midiAt(s,f));},
+  onTap(s,f){if(this.state==='ready'){ui.status('Press Start first.');return;}this.onNote(midiAt(s,f),false);},
   finish(){this.state='done';const t=ui.timer.stop();record(this.id,this.pc,t,this.err);this.render();
     ui.status(`All ${this.route.length} positions in ${fmt(t)}${this.err?` · ${this.err} wrong note${this.err>1?'s':''}`:' · clean'}. Press space when you are ready for the next note.`,'hit');},
   onAction(a,el){if(a==='start')this.start();if(a==='mic')Mic.start();},
