@@ -1,5 +1,11 @@
 <title>Fretboard Lab</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fretboard Lab">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@600;800&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -23,6 +29,7 @@
   --accent:#7894ff; --accent-soft:#1e2851; --on-accent:#0b1022; --hit:#3cc98a; --miss:#ff6b61;
   --wood:#33221d; --wood-2:#251813; color-scheme:dark }
 html,body{background:var(--bg);color:var(--ink)}
+[hidden]{display:none!important}
 body{font-family:var(--body);font-size:15px;line-height:1.5}
 *{box-sizing:border-box}
 button,select,input{font:inherit;color:inherit}
@@ -116,21 +123,76 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .heat-t{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
 .set-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px}
 @media (max-width:560px){.big-note{font-size:60px}.brand span{display:none}}
+/* ---- Phone in landscape: rail on the left, neck fills the screen, panels in a "More" sheet ---- */
+.pl-only{display:none}
+.short{display:none}
+.lrail{display:contents}
+.rotate-hint{display:none;margin:0;font-size:13px;color:var(--muted)}
+@media (orientation:portrait) and (max-width:600px){.rotate-hint{display:block}}
+html.pl,html.pl body{height:100%;overflow:hidden}
+html.pl .app{height:100%;max-width:none;padding-block:6px;grid-template-rows:minmax(0,1fr);gap:0}
+html.pl .top,html.pl .rail,html.pl .chapter-head,html.pl .blurb,html.pl .rotate-hint{display:none}
+html.pl .layout{display:block;height:100%;min-height:0}
+html.pl .stage{height:100%;border:0;background:transparent;padding:0;gap:6px 12px;
+  grid-template-columns:116px minmax(0,1.35fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"rail prompt prompt" "rail board board" "rail controls status"}
+html.pl .lrail{display:flex;flex-direction:column;gap:6px;grid-area:rail;min-height:0;overflow-y:auto}
+html.pl #chSelect{display:block;width:100%;font-size:13px;padding:5px 4px}
+html.pl .tabs{flex-direction:column;flex-wrap:nowrap}
+html.pl .tab{width:100%;justify-content:flex-start;padding:10px}
+html.pl .tab em,html.pl .long{display:none}
+html.pl .short{display:inline}
+html.pl .rail-foot{display:flex;flex-direction:column;gap:6px;margin-top:auto}
+html.pl .rail-foot .mic-pill{justify-content:center;border-radius:8px}
+html.pl .rail-foot .btn{padding:6px 10px}
+html.pl .controls .btn{white-space:nowrap}
+html.pl .controls [data-act="mic"]{display:none}
+.panel{align-content:start}
+html.pl .prompt-row{grid-area:prompt;align-items:center;gap:10px}
+html.pl .prompt{align-items:center;gap:10px}
+html.pl .big-note{font-size:42px}
+html.pl .prompt-sub,html.pl .seq{padding-bottom:0}
+html.pl .timer{font-size:18px;padding:0}
+html.pl .board-wrap{grid-area:board;min-height:0;padding:4px;display:flex}
+html.pl #board{flex:1;width:100%;height:100%;max-width:none}
+html.pl .controls{grid-area:controls;flex-wrap:nowrap;overflow-x:auto;min-width:0;gap:8px}
+html.pl .controls .chips{flex-wrap:nowrap}
+html.pl .controls .shapes{display:flex;gap:10px}
+html.pl .status{grid-area:status;align-self:center;font-size:14px;line-height:1.3;min-height:0;min-width:0}
+html.pl .answers{display:flex;gap:6px;width:auto}
+html.pl .answers .chip{min-width:46px;padding:8px 4px}
+html.pl .side{display:none}
+html.pl.more .side{display:grid;position:fixed;inset:0;z-index:20;background:var(--bg);overflow-y:auto;
+  grid-template-columns:repeat(3,minmax(0,1fr));align-content:start;gap:12px;
+  padding-top:max(12px,env(safe-area-inset-top,0px));padding-bottom:max(12px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+html.pl .sheet-head{display:flex;grid-column:1/-1;justify-content:space-between;align-items:center}
+html.pl .sheet-head b{font-family:var(--display);font-size:22px;text-transform:uppercase;letter-spacing:.03em}
+html.pl .about{display:grid;grid-column:1/-1}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
 <div class="app">
   <header class="top">
     <div class="brand"><h1>Fretboard Lab</h1><span>a practice companion for the LoG lessons</span></div>
-    <button class="mic-pill" id="micPill" type="button"><span class="led"></span><span id="micPillTxt">Mic off</span></button>
+    <button class="mic-pill" id="micPill" type="button"><span class="led"></span><span class="mtxt">Mic off</span></button>
   </header>
+  <p class="rotate-hint">On a phone, turn it sideways for the full neck.</p>
 
   <nav class="rail" id="rail" aria-label="Chapters"></nav>
 
   <div class="layout">
     <main class="stage">
       <div class="chapter-head"><h2 id="chTitle"></h2><p id="chDesc"></p></div>
-      <div class="tabs" id="tabs" role="tablist"></div>
+      <div class="lrail">
+        <select id="chSelect" class="pl-only" aria-label="Chapter"></select>
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <div class="rail-foot pl-only">
+          <button class="mic-pill" id="micMini" type="button"><span class="led"></span><span class="mtxt">Mic off</span></button>
+          <button class="btn" id="fsBtn" type="button" hidden>Full screen</button>
+          <button class="btn" id="moreBtn" type="button">More</button>
+        </div>
+      </div>
       <p class="blurb" id="blurb"></p>
       <div class="prompt-row">
         <div class="prompt" id="prompt"></div>
@@ -142,6 +204,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     </main>
 
     <aside class="side">
+      <div class="sheet-head pl-only"><b>More</b><button class="btn primary" id="moreClose" type="button">Done</button></div>
+      <section class="panel about pl-only"><h3 id="moreTitle"></h3><p class="small" id="moreBlurb"></p></section>
       <section class="panel">
         <h3>Microphone</h3>
         <div class="meter">
@@ -194,9 +258,9 @@ function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor
 
 /* The octave shapes that link every copy of a note */
 const SHAPES=[
-  {id:'skip',label:'Skip one string: up 2 frets, or 3 when you cross onto B'},
-  {id:'wide',label:'Skip two strings: back 3 frets, or 2 when you cross onto B'},
-  {id:'two', label:'Low E to high e, same fret (two octaves)'}
+  {id:'skip',short:'Skip 1',label:'Skip one string: up 2 frets, or 3 when you cross onto B'},
+  {id:'wide',short:'Skip 2',label:'Skip two strings: back 3 frets, or 2 when you cross onto B'},
+  {id:'two',short:'E to e',label:'Low E to high e, same fret (two octaves)'}
 ];
 function octaveLinks(pos){
   const out=[];
@@ -235,10 +299,12 @@ const svg=document.getElementById('board'),wrap=document.getElementById('boardWr
 const board={dots:[],lines:[],geo:null,
   set(o){if(o.dots)this.dots=o.dots;if(o.lines)this.lines=o.lines;else if(o.dots)this.lines=[];this.render();},
   render(){
-    const F=maxFret(),vertical=wrap.clientWidth<600,L=settings.lefty;
+    const F=maxFret(),pl=document.documentElement.classList.contains('pl'),vertical=!pl&&wrap.clientWidth<600,L=settings.lefty;
     let W,H,pos,parts=[];
     if(!vertical){
-      const padL=58,ss=36,top=30,fw=(900-padL-16)/F;W=900;H=top+5*ss+40;
+      const padL=58,top=30,fw=(900-padL-16)/F;W=900;
+      let ss=36;if(pl&&wrap.clientWidth>20&&wrap.clientHeight>20){const ar=(wrap.clientHeight-8)/(wrap.clientWidth-8);ss=Math.max(28,Math.min(62,(900*ar-70)/5));}
+      H=top+5*ss+40;const lf=pl?Math.round(Math.min(20,ss*.42)):12;
       pos=(s,f)=>{let x=f===0?padL-26:padL+(f-.5)*fw;if(L)x=W-x;return{x,y:top+s*ss};};
       const X=x=>L?W-x:x;
       parts.push(`<rect x="${L?16:padL}" y="${top-18}" width="${W-padL-16}" height="${5*ss+36}" rx="4" fill="var(--wood)"/>`);
@@ -246,9 +312,9 @@ const board={dots:[],lines:[],geo:null,
       if(F>=12){const p=pos(0,12);parts.push(`<circle cx="${p.x}" cy="${top+1.5*ss}" r="7" fill="var(--inlay)" opacity=".85"/><circle cx="${p.x}" cy="${top+3.5*ss}" r="7" fill="var(--inlay)" opacity=".85"/>`);}
       for(let k=0;k<=F;k++){const x=X(padL+k*fw);parts.push(`<line x1="${x}" x2="${x}" y1="${top-18}" y2="${top+5*ss+18}" stroke="${k?'var(--fret)':'var(--nut)'}" stroke-width="${k?2.5:7}"/>`);}
       for(let s=0;s<6;s++){const y=top+s*ss;parts.push(`<line x1="${X(padL-48)}" x2="${X(W-16)}" y1="${y}" y2="${y}" stroke="var(--string)" stroke-width="${1+s*.45}"/>`);
-        parts.push(`<text x="${X(10)}" y="${y+4}" font-family="var(--mono)" font-size="12" fill="var(--muted)" text-anchor="middle">${STRING_SHORT[s]}</text>`);}
-      for(let f=0;f<=F;f++){const p=pos(0,f);parts.push(`<text x="${p.x}" y="${top+5*ss+34}" font-family="var(--mono)" font-size="12" fill="var(--muted)" text-anchor="middle">${f}</text>`);}
-      this.geo={vertical,r:12.5,hit:(s,f)=>{const p=pos(s,f);const w=f===0?40:fw;return{x:p.x-w/2,y:p.y-ss/2,w,h:ss};}};
+        parts.push(`<text x="${X(10)}" y="${y+4}" font-family="var(--mono)" font-size="${lf}" fill="var(--muted)" text-anchor="middle">${STRING_SHORT[s]}</text>`);}
+      for(let f=0;f<=F;f++){const p=pos(0,f);parts.push(`<text x="${p.x}" y="${top+5*ss+20+lf}" font-family="var(--mono)" font-size="${lf}" fill="var(--muted)" text-anchor="middle">${f}</text>`);}
+      this.geo={vertical,r:pl?Math.max(12.5,Math.min(19,ss*.36)):12.5,hit:(s,f)=>{const p=pos(s,f);const w=f===0?40:fw;return{x:p.x-w/2,y:p.y-ss/2,w,h:ss};}};
     }else{
       const padX=40,ss=46,nutY=46,fh=44;W=padX*2+5*ss;H=nutY+F*fh+14;
       pos=(s,f)=>{let x=padX+(5-s)*ss;if(L)x=W-x;return{x,y:f===0?nutY-24:nutY+(f-.5)*fh};};
@@ -270,7 +336,7 @@ const board={dots:[],lines:[],geo:null,
       if(d.kind==='live'){parts.push(`<circle cx="${p.x}" cy="${p.y}" r="${r+4}" fill="none" stroke="var(--hit)" stroke-width="3"/>`);continue;}
       const [fill,ink]=style[d.kind]||style.shown;
       parts.push(`<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${fill}" stroke="rgba(0,0,0,.35)" stroke-width="1"/>`);
-      if(d.label)parts.push(`<text x="${p.x}" y="${p.y+4.5}" font-family="var(--mono)" font-weight="700" font-size="${d.label.length>1?11:13}" fill="${ink}" text-anchor="middle">${d.label}</text>`);}
+      if(d.label){const fs=Math.round(r*(d.label.length>1?.85:1.02));parts.push(`<text x="${p.x}" y="${p.y+fs*.36}" font-family="var(--mono)" font-weight="700" font-size="${fs}" fill="${ink}" text-anchor="middle">${d.label}</text>`);}}
     for(let s=0;s<6;s++)for(let f=0;f<=F;f++){const h=this.geo.hit(s,f);parts.push(`<rect class="hit" data-s="${s}" data-f="${f}" x="${h.x}" y="${h.y}" width="${h.w}" height="${h.h}"><title>${STRING_FULL[s]} string, fret ${f}</title></rect>`);}
     svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
     svg.style.maxWidth=vertical?'380px':'none';
@@ -278,7 +344,7 @@ const board={dots:[],lines:[],geo:null,
   }
 };
 svg.addEventListener('click',e=>{const t=e.target.closest('[data-s]');if(!t)return;ex.onTap?.(+t.dataset.s,+t.dataset.f);});
-new ResizeObserver(()=>{const v=wrap.clientWidth<600;if(board.geo&&board.geo.vertical!==v)board.render();}).observe(wrap);
+let rq=0;new ResizeObserver(()=>{cancelAnimationFrame(rq);rq=requestAnimationFrame(()=>{const pl=document.documentElement.classList.contains('pl');const v=!pl&&wrap.clientWidth<600;if(pl||!board.geo||board.geo.vertical!==v)board.render();});}).observe(wrap);
 
 /* ---------- Shared UI ---------- */
 const $=id=>document.getElementById(id);
@@ -300,7 +366,7 @@ $('controls').addEventListener('change',e=>{const b=e.target.closest('[data-act]
 
 /* ---------- Exercises ---------- */
 const EX={
-explore:{id:'explore',title:'Explore',tag:'Reference',
+explore:{id:'explore',title:'Explore',short:'Explore',tag:'Reference',
   blurb:'Pick a note to see every place it lives and the octave shapes that link them. Tap any fret to jump to that note. With the mic on, whatever you play is ringed in green.',
   pc:5,show:{skip:true,wide:false,two:true},live:[],
   mount(){ui.timer.hide();this.render();ui.status('');},
@@ -308,7 +374,7 @@ explore:{id:'explore',title:'Explore',tag:'Reference',
     const n=positionsOf(this.pc).length;
     ui.prompt(bigNote(this.pc,`${n} places between the nut and fret ${settings.frets}`));
     ui.controls(`<div class="chips">${ALL12.map(p=>`<button class="chip ${p===this.pc?'on':''}" data-act="pc" data-v="${p}" type="button">${SHARP[p]}</button>`).join('')}</div>
-      <div style="display:grid;gap:4px">${SHAPES.map(s=>`<label class="tog" for="sh-${s.id}"><input type="checkbox" id="sh-${s.id}" data-act="shape" data-v="${s.id}" ${this.show[s.id]?'checked':''}><span class="swatch ${s.id}"></span>${s.label}</label>`).join('')}</div>`);
+      <div class="shapes" style="display:grid;gap:4px">${SHAPES.map(s=>`<label class="tog" for="sh-${s.id}"><input type="checkbox" id="sh-${s.id}" data-act="shape" data-v="${s.id}" ${this.show[s.id]?'checked':''}><span class="swatch ${s.id}"></span><span class="long">${s.label}</span><span class="short">${s.short}</span></label>`).join('')}</div>`);
     this.draw();},
   draw(){const pos=positionsOf(this.pc);board.set({dots:[...pos.map(p=>({...p,kind:'shown',label:SHARP[this.pc]})),...this.live],lines:octaveLinks(pos).filter(l=>this.show[l.type])});},
   onAction(a,el){if(a==='pc'){this.pc=+el.dataset.v;this.render();}if(a==='shape'){this.show[el.dataset.v]=el.checked;this.draw();}},
@@ -316,7 +382,7 @@ explore:{id:'explore',title:'Explore',tag:'Reference',
   onNote(m){this.live=positionsOfMidi(m).map(p=>({...p,kind:'live'}));this.draw();ui.status(`Heard ${noteName(m)}`);
     clearTimeout(this._t);this._t=setTimeout(()=>{this.live=[];this.draw();},1600);}
 },
-tapall:{id:'tapall',title:'Find them all',tag:'On screen',
+tapall:{id:'tapall',title:'Find them all',short:'Find all',tag:'On screen',
   blurb:'Press Start and a note appears. Tap every place it lives on the neck, as fast as you can. Wrong taps count as misses. Use the shapes: find one, then jump.',
   hint:false,state:'ready',
   mount(){this.ready();},
@@ -340,7 +406,7 @@ tapall:{id:'tapall',title:'Find them all',tag:'On screen',
   onAction(a,el){if(a==='start')this.start();if(a==='hint'){this.hint=el.checked;this.draw();}},
   onKey(e){if((e.key===' '||e.key==='Enter')&&this.state!=='run'){e.preventDefault();this.start();}}
 },
-nameit:{id:'nameit',title:'Name the note',tag:'On screen',
+nameit:{id:'nameit',title:'Name the note',short:'Name it',tag:'On screen',
   blurb:'One fret lights up. Name the note. Ten per round, and the clock runs for each question. On a keyboard you can answer with the letters A to G.',
   state:'ready',
   mount(){this.state='ready';this.q=null;ui.timer.reset();
@@ -366,7 +432,7 @@ nameit:{id:'nameit',title:'Name the note',tag:'On screen',
   onKey(e){if(this.state!=='run'){if(e.key===' '||e.key==='Enter'){e.preventDefault();this.round();}return;}
     const i=SHARP.indexOf(e.key.toUpperCase());if(i>=0)this.answer(i);}
 },
-sweep:{id:'sweep',title:'Find it on the guitar',tag:'Guitar + mic',
+sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + mic',
   blurb:'Play the note along two octave chains, each climbing with the skip-one-string shape: one starting on the low E string, one on the A string, lowest chain first. If the note’s first instance is an open D, G or B string, start there and follow the shape up from it first. The mic hears pitch, not which string you used, so the app assumes this path. No mic? Tap the board to stand in for the guitar. The neck runs to fret 16 here so every chain fits.',
   frets:16,
   state:'ready',
@@ -427,11 +493,12 @@ const CHAPTERS=[
 let chapter=CHAPTERS.find(c=>c.id===saved.last?.ch&&!c.later)||CHAPTERS[0];
 let ex=EX[chapter.exercises.includes(saved.last?.ex)?saved.last.ex:chapter.exercises[0]];
 
-function renderRail(){$('rail').innerHTML=CHAPTERS.map(c=>`<button class="ch ${c.id===chapter.id?'on':''} ${c.later?'later':''}" ${c.later?'disabled':''} data-ch="${c.id}" type="button"><small>${c.book}</small><b>${c.title}</b></button>`).join('');}
+function renderRail(){$('chSelect').innerHTML=CHAPTERS.map(c=>`<option value="${c.id}" ${c.id===chapter.id?'selected':''} ${c.later?'disabled':''}>${c.title}${c.later?' (later)':''}</option>`).join('');$('rail').innerHTML=CHAPTERS.map(c=>`<button class="ch ${c.id===chapter.id?'on':''} ${c.later?'later':''}" ${c.later?'disabled':''} data-ch="${c.id}" type="button"><small>${c.book}</small><b>${c.title}</b></button>`).join('');}
 $('rail').addEventListener('click',e=>{const b=e.target.closest('[data-ch]');if(!b||b.disabled)return;chapter=CHAPTERS.find(c=>c.id===b.dataset.ch);openEx(chapter.exercises[0]);});
-function renderTabs(){$('tabs').innerHTML=chapter.exercises.map(id=>`<button class="tab ${id===ex.id?'on':''}" role="tab" aria-selected="${id===ex.id}" data-ex="${id}" type="button">${EX[id].title}<em>${EX[id].tag}</em></button>`).join('');}
+function renderTabs(){$('tabs').innerHTML=chapter.exercises.map(id=>`<button class="tab ${id===ex.id?'on':''}" role="tab" aria-selected="${id===ex.id}" data-ex="${id}" type="button"><span class="long">${EX[id].title}</span><span class="short">${EX[id].short}</span><em>${EX[id].tag}</em></button>`).join('');}
 $('tabs').addEventListener('click',e=>{const b=e.target.closest('[data-ex]');if(b)openEx(b.dataset.ex);});
-function openEx(id){ex=EX[id];fretLimit=ex.frets||null;renderRail();$('chTitle').textContent=chapter.title;$('chDesc').textContent=chapter.desc;renderTabs();$('blurb').textContent=ex.blurb;ex.mount();renderStats();persist();}
+$('chSelect').addEventListener('change',e=>{const c=CHAPTERS.find(c=>c.id===e.target.value);if(c&&!c.later){chapter=c;openEx(c.exercises[0]);}});
+function openEx(id){ex=EX[id];fretLimit=ex.frets||null;$('moreTitle').textContent=chapter.title+' · '+ex.title;$('moreBlurb').textContent=ex.blurb;renderRail();$('chTitle').textContent=chapter.title;$('chDesc').textContent=chapter.desc;renderTabs();$('blurb').textContent=ex.blurb;ex.mount();renderStats();persist();}
 document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textarea'))return;if(e.target.closest('button')&&(e.key===' '||e.key==='Enter'))return;ex.onKey?.(e);});
 
 /* ---------- Progress panel ---------- */
@@ -487,7 +554,7 @@ const Mic={on:false,hist:[],last:null,silent:0,prevRms:0,tick:0,
   }
 };
 function micUI(err){
-  $('micPill').classList.toggle('on',Mic.on);$('micPillTxt').textContent=Mic.on?'Listening':'Mic off';
+  for(const el of [$('micPill'),$('micMini')]){el.classList.toggle('on',Mic.on);el.querySelector('.mtxt').textContent=Mic.on?'Listening':'Mic off';}
   $('micBtn').textContent=Mic.on?'Turn off mic':'Turn on mic';$('micBtn').classList.toggle('primary',!Mic.on);
   const msg=$('micMsg');
   if(err){msg.className='warn';
@@ -499,7 +566,7 @@ function micUI(err){
     if(!Mic.on){$('mNote').textContent='–';$('mLevel').style.width='0%';}}
 }
 $('micBtn').onclick=()=>Mic.on?Mic.stop():Mic.start();
-$('micPill').onclick=$('micBtn').onclick;
+$('micPill').onclick=$('micMini').onclick=$('micBtn').onclick;
 $('gate').value=settings.gate;$('gate').oninput=e=>{settings.gate=+e.target.value;persist();};
 
 /* ---------- Settings ---------- */
@@ -510,6 +577,27 @@ $('setLefty').onchange=e=>{settings.lefty=e.target.checked;persist();board.rende
 let resetArmed=false;
 $('resetBtn').onclick=()=>{if(!resetArmed){resetArmed=true;$('resetBtn').textContent='Tap again to clear';$('resetMsg').textContent='This clears every saved time.';setTimeout(()=>{resetArmed=false;$('resetBtn').textContent='Reset times';$('resetMsg').textContent='Times are kept in this browser.';},4000);return;}
   stats={};persist();renderStats();resetArmed=false;$('resetBtn').textContent='Reset times';$('resetMsg').textContent='Times cleared.';};
+
+/* ---------- Phone landscape mode ---------- */
+const root=document.documentElement;
+const plMQ=matchMedia('(orientation: landscape) and (max-height: 540px)');
+function applyPl(){root.classList.toggle('pl',plMQ.matches);if(!plMQ.matches)root.classList.remove('more');if(board.geo)board.render();}
+plMQ.addEventListener?plMQ.addEventListener('change',applyPl):plMQ.addListener(applyPl);
+applyPl();
+$('moreBtn').onclick=()=>root.classList.add('more');
+$('moreClose').onclick=()=>root.classList.remove('more');
+document.addEventListener('keydown',e=>{if(e.key==='Escape')root.classList.remove('more');});
+
+/* Keep the screen awake while practising */
+let wakeLock=null;
+async function keepAwake(){try{if(!wakeLock&&'wakeLock' in navigator&&document.visibilityState==='visible'){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}catch(e){}}
+document.addEventListener('pointerdown',keepAwake);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')keepAwake();});
+
+/* Full screen where the browser allows it (Android Chrome; iPhone uses Add to Home Screen instead) */
+if(document.fullscreenEnabled){$('fsBtn').hidden=false;
+  $('fsBtn').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else{await root.requestFullscreen();try{await screen.orientation.lock('landscape');}catch(e){}}}catch(e){}};
+  document.addEventListener('fullscreenchange',()=>{$('fsBtn').textContent=document.fullscreenElement?'Exit full screen':'Full screen';});}
 
 openEx(ex.id);
 </script>
