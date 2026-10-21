@@ -1,0 +1,515 @@
+<title>Fretboard Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@600;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: chapter rail on top, then a practice stage (prompt, fretboard, status) with a side panel for mic, progress and settings. */
+:root{
+  --bg:#eceff3; --surface:#ffffff; --surface-2:#f4f6f9; --ink:#14171d; --muted:#596171; --line:#d5d9e1;
+  --accent:#2b4fd8; --accent-soft:#e2e8ff; --on-accent:#ffffff; --hit:#15865a; --miss:#c93b33;
+  --wood:#3b2721; --wood-2:#2b1c17; --fret:#b8bcc5; --nut:#efe8dc; --string:#d8c7a0; --inlay:#e9e1d3;
+  --dot-shown:#efe8dc; --dot-shown-ink:#2a1c17; --sh-skip:#f1b443; --sh-wide:#6fd0e6; --sh-two:#ec8fbf;
+  --display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+  --body:'Atkinson Hyperlegible',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1116; --surface:#171a21; --surface-2:#1d2129; --ink:#e7e9ef; --muted:#98a1b1; --line:#2b303b;
+  --accent:#7894ff; --accent-soft:#1e2851; --on-accent:#0b1022; --hit:#3cc98a; --miss:#ff6b61;
+  --wood:#33221d; --wood-2:#251813; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0f1116; --surface:#171a21; --surface-2:#1d2129; --ink:#e7e9ef; --muted:#98a1b1; --line:#2b303b;
+  --accent:#7894ff; --accent-soft:#1e2851; --on-accent:#0b1022; --hit:#3cc98a; --miss:#ff6b61;
+  --wood:#33221d; --wood-2:#251813; color-scheme:dark }
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--body);font-size:15px;line-height:1.5}
+*{box-sizing:border-box}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px;display:grid;gap:18px}
+
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:.02em;text-transform:uppercase;margin:0;line-height:1}
+.brand span{color:var(--muted);font-size:13px}
+.mic-pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
+.mic-pill .led{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.mic-pill.on .led{background:var(--hit);box-shadow:0 0 0 3px color-mix(in srgb,var(--hit) 25%,transparent)}
+
+.rail{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.ch{flex:0 0 auto;min-width:170px;max-width:220px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;cursor:pointer;display:grid;gap:2px}
+.ch small{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ch b{font-weight:700;font-size:14px;line-height:1.25}
+.ch.on{border-color:var(--accent);background:var(--accent-soft)}
+.ch.later{cursor:default;opacity:.62;background:transparent;border-style:dashed}
+.ch.later small::after{content:" · later"}
+
+.layout{display:grid;gap:18px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:980px){.layout{grid-template-columns:minmax(0,1fr) 310px;align-items:start}}
+
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:14px;min-width:0}
+.chapter-head h2{font-family:var(--display);font-weight:800;font-size:26px;margin:0;text-transform:uppercase;letter-spacing:.02em;text-wrap:balance}
+.chapter-head p{margin:2px 0 0;color:var(--muted);max-width:68ch}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+.tab em{font-style:normal;font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.tab.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.tab.on em{color:inherit;opacity:.7}
+.blurb{margin:0;color:var(--muted);font-size:14px;max-width:72ch}
+
+.prompt-row{display:flex;gap:16px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
+.prompt{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;min-width:0}
+.big-note{font-family:var(--display);font-weight:800;font-size:76px;line-height:.85;letter-spacing:.01em}
+.big-note.q{color:var(--sh-skip)}
+.big-note.ready{color:var(--muted)}
+.prompt-sub{color:var(--muted);padding-bottom:6px;max-width:40ch}
+.timer{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:22px;color:var(--muted);padding-bottom:4px}
+.timer.run{color:var(--ink)}
+.seq{display:flex;gap:4px;flex-wrap:wrap;padding-bottom:6px}
+.seq span{font-family:var(--mono);font-size:12px;min-width:2.2em;text-align:center;border:1px solid var(--line);border-radius:6px;padding:3px 7px;color:var(--muted)}
+.seq span.cur{border-color:var(--accent);color:var(--accent);font-weight:700}
+.seq span.ok{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
+.controls{display:flex;gap:10px 14px;flex-wrap:wrap;align-items:center}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{min-width:40px;border:1px solid var(--line);background:var(--surface-2);border-radius:7px;padding:6px 8px;cursor:pointer;font-family:var(--mono);font-size:13px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.answers{display:grid;grid-template-columns:repeat(auto-fill,minmax(54px,1fr));gap:6px;width:100%}
+.answers .chip{padding:10px 4px;font-size:15px;font-weight:700}
+.btn{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:700}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn:disabled{opacity:.5;cursor:default}
+.tog{display:inline-flex;align-items:center;gap:7px;font-size:14px;cursor:pointer}
+.swatch{width:18px;height:4px;border-radius:2px;display:inline-block}
+.swatch.skip{background:var(--sh-skip)} .swatch.wide{background:var(--sh-wide)} .swatch.two{background:var(--sh-two)}
+select{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 8px}
+
+.board-wrap{background:var(--surface-2);border-radius:12px;padding:10px;min-width:0}
+#board{display:block;width:100%;height:auto;margin:0 auto;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+#board .hit{fill:transparent;cursor:pointer}
+#board .hit:hover{fill:rgba(255,255,255,.06)}
+.status{min-height:24px;font-size:15px}
+.status.hit{color:var(--hit);font-weight:700}
+.status.miss{color:var(--miss);font-weight:700}
+
+.side{display:grid;gap:14px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:10px}
+.panel h3{margin:0;font-family:var(--display);font-weight:600;font-size:17px;text-transform:uppercase;letter-spacing:.06em}
+.meter{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:center}
+.meter-note{font-family:var(--mono);font-weight:700;font-size:40px;line-height:1;min-width:2.6ch;grid-row:span 2}
+.bar{height:8px;border-radius:4px;background:var(--surface-2);position:relative;overflow:hidden;border:1px solid var(--line)}
+.bar i{position:absolute;top:0;bottom:0;left:0;background:var(--hit);width:0%}
+.cents{height:18px;position:relative;border-radius:4px;background:var(--surface-2);border:1px solid var(--line)}
+.cents::before{content:"";position:absolute;left:50%;top:2px;bottom:2px;width:1px;background:var(--muted)}
+.cents i{position:absolute;top:2px;bottom:2px;width:4px;margin-left:-2px;border-radius:2px;background:var(--accent);left:50%;transition:left .08s}
+.small{font-size:13px;color:var(--muted);margin:0}
+.warn{font-size:13px;margin:0;color:var(--miss)}
+.range{display:grid;gap:4px;font-size:13px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.heat{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;align-items:end;height:96px}
+.heat div{display:grid;grid-template-rows:1fr auto;gap:3px;height:100%;text-align:center}
+.heat .col{align-self:end;background:var(--accent);border-radius:4px 4px 2px 2px;min-height:3px}
+.heat .col.slow{background:var(--miss)}
+.heat .col.none{background:var(--line)}
+.heat span{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.heat-t{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.set-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px}
+@media (max-width:560px){.big-note{font-size:60px}.brand span{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><h1>Fretboard Lab</h1><span>a practice companion for the LoG lessons</span></div>
+    <button class="mic-pill" id="micPill" type="button"><span class="led"></span><span id="micPillTxt">Mic off</span></button>
+  </header>
+
+  <nav class="rail" id="rail" aria-label="Chapters"></nav>
+
+  <div class="layout">
+    <main class="stage">
+      <div class="chapter-head"><h2 id="chTitle"></h2><p id="chDesc"></p></div>
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <p class="blurb" id="blurb"></p>
+      <div class="prompt-row">
+        <div class="prompt" id="prompt"></div>
+        <div class="timer" id="timer">0.0 s</div>
+      </div>
+      <div class="controls" id="controls"></div>
+      <div class="board-wrap" id="boardWrap"><svg id="board" role="img" aria-label="Guitar fretboard"></svg></div>
+      <div class="status" id="status" aria-live="polite"></div>
+    </main>
+
+    <aside class="side">
+      <section class="panel">
+        <h3>Microphone</h3>
+        <div class="meter">
+          <div class="meter-note" id="mNote">–</div>
+          <div class="cents" title="Tuning: left is flat, right is sharp"><i id="mCents"></i></div>
+          <div class="bar" title="Input level"><i id="mLevel"></i></div>
+        </div>
+        <button class="btn primary" id="micBtn" type="button">Turn on mic</button>
+        <p class="small" id="micMsg">Standard tuning, A = 440 Hz. Play single notes and let each ring briefly.</p>
+        <label class="range" for="gate">Sensitivity
+          <input type="range" id="gate" min="0" max="100" step="1">
+        </label>
+      </section>
+
+      <section class="panel">
+        <h3>Your speed per note</h3>
+        <div id="stats"></div>
+      </section>
+
+      <section class="panel">
+        <h3>Settings</h3>
+        <div class="set-row"><label for="setFrets">Frets shown</label>
+          <select id="setFrets"><option value="12">0 – 12</option><option value="15">0 – 15</option></select></div>
+        <label class="tog" for="setNat"><input type="checkbox" id="setNat"> Natural notes only in drills</label>
+        <label class="tog" for="setLefty"><input type="checkbox" id="setLefty"> Left-handed view</label>
+        <div class="set-row"><span class="small" id="resetMsg">Times are kept in this browser.</span>
+          <button class="btn" id="resetBtn" type="button">Reset times</button></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* ---------- Music basics ---------- */
+const OPEN=[64,59,55,50,45,40];               // string index 0 = high e … 5 = low E
+const STRING_SHORT=['e','B','G','D','A','E'];
+const STRING_FULL=['high e','B','G','D','A','low E'];
+const SHARP=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const FLAT =['C','D♭','D','E♭','E','F','G♭','G','A♭','A','B♭','B'];
+const NATURALS=[0,2,4,5,7,9,11];
+const ALL12=[0,1,2,3,4,5,6,7,8,9,10,11];
+const noteLabel=pc=>SHARP[pc]===FLAT[pc]?SHARP[pc]:SHARP[pc]+' / '+FLAT[pc];
+const noteName=m=>SHARP[m%12]+(Math.floor(m/12)-1);
+const midiAt=(s,f)=>OPEN[s]+f;
+const fmt=ms=>(ms/1000).toFixed(1)+' s';
+let fretLimit=null;const maxFret=()=>fretLimit??settings.frets;
+function positionsOf(pc){const out=[];for(let s=0;s<6;s++)for(let f=0;f<=maxFret();f++)if(midiAt(s,f)%12===pc)out.push({s,f});return out;}
+function positionsOfMidi(m){const out=[];for(let s=0;s<6;s++){const f=m-OPEN[s];if(f>=0&&f<=maxFret())out.push({s,f});}return out;}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+/* The octave shapes that link every copy of a note */
+const SHAPES=[
+  {id:'skip',label:'Skip one string: up 2 frets, or 3 when you cross onto B'},
+  {id:'wide',label:'Skip two strings: back 3 frets, or 2 when you cross onto B'},
+  {id:'two', label:'Low E to high e, same fret (two octaves)'}
+];
+function octaveLinks(pos){
+  const out=[];
+  for(let i=0;i<pos.length;i++)for(let j=i+1;j<pos.length;j++){
+    const a=pos[i],b=pos[j],dm=Math.abs(midiAt(a.s,a.f)-midiAt(b.s,b.f)),ds=Math.abs(a.s-b.s);
+    if(dm===12&&ds===2)out.push({a,b,type:'skip'});
+    else if(dm===12&&ds===3)out.push({a,b,type:'wide'});
+    else if(dm===24&&ds===5&&a.f===b.f)out.push({a,b,type:'two'});
+  }
+  return out;
+}
+
+/* ---------- Storage (this browser only) ---------- */
+const KEY='fretlab.v1';
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return {}}}
+const saved=load();
+const settings=Object.assign({frets:12,naturals:true,lefty:false,gate:35,order:'up'},saved.settings||{});
+let stats=saved.stats||{};
+function persist(){try{localStorage.setItem(KEY,JSON.stringify({settings,stats,last:{ch:chapter.id,ex:ex.id}}))}catch(e){}}
+function record(exId,pc,t,e){const a=((stats[exId]??={})[pc]??=[]);a.push({t:Math.round(t),e,d:Date.now()});if(a.length>20)a.shift();persist();renderStats();}
+const recent=(exId,pc)=>(stats[exId]?.[pc]||[]).slice(-5);
+function avgTime(exId,pc){const r=recent(exId,pc);return r.length?r.reduce((s,x)=>s+x.t,0)/r.length:null;}
+function errRate(exId,pc){const r=recent(exId,pc);return r.length?r.reduce((s,x)=>s+(x.e>0?1:0),0)/r.length:0;}
+/* Adaptive picking: slow, missed and untried notes come up more often */
+function pickPc(exId,prev){
+  const pool=settings.naturals?NATURALS:ALL12;
+  const av=pool.map(p=>avgTime(exId,p)).filter(x=>x!=null);
+  const mean=av.length?av.reduce((a,b)=>a+b)/av.length:1;
+  const w=pool.map(p=>{if(p===prev)return 0;const a=avgTime(exId,p);if(a==null)return 2.2;return .5+a/mean+1.5*errRate(exId,p);});
+  let r=Math.random()*w.reduce((a,b)=>a+b);for(let i=0;i<pool.length;i++){r-=w[i];if(r<=0)return pool[i];}
+  return pool[0];
+}
+
+/* ---------- Fretboard ---------- */
+const svg=document.getElementById('board'),wrap=document.getElementById('boardWrap');
+const board={dots:[],lines:[],geo:null,
+  set(o){if(o.dots)this.dots=o.dots;if(o.lines)this.lines=o.lines;else if(o.dots)this.lines=[];this.render();},
+  render(){
+    const F=maxFret(),vertical=wrap.clientWidth<600,L=settings.lefty;
+    let W,H,pos,parts=[];
+    if(!vertical){
+      const padL=58,ss=36,top=30,fw=(900-padL-16)/F;W=900;H=top+5*ss+40;
+      pos=(s,f)=>{let x=f===0?padL-26:padL+(f-.5)*fw;if(L)x=W-x;return{x,y:top+s*ss};};
+      const X=x=>L?W-x:x;
+      parts.push(`<rect x="${L?16:padL}" y="${top-18}" width="${W-padL-16}" height="${5*ss+36}" rx="4" fill="var(--wood)"/>`);
+      for(const f of [3,5,7,9,15].filter(f=>f<=F)){const p=pos(2,f);parts.push(`<circle cx="${p.x}" cy="${top+2.5*ss}" r="7" fill="var(--inlay)" opacity=".85"/>`);}
+      if(F>=12){const p=pos(0,12);parts.push(`<circle cx="${p.x}" cy="${top+1.5*ss}" r="7" fill="var(--inlay)" opacity=".85"/><circle cx="${p.x}" cy="${top+3.5*ss}" r="7" fill="var(--inlay)" opacity=".85"/>`);}
+      for(let k=0;k<=F;k++){const x=X(padL+k*fw);parts.push(`<line x1="${x}" x2="${x}" y1="${top-18}" y2="${top+5*ss+18}" stroke="${k?'var(--fret)':'var(--nut)'}" stroke-width="${k?2.5:7}"/>`);}
+      for(let s=0;s<6;s++){const y=top+s*ss;parts.push(`<line x1="${X(padL-48)}" x2="${X(W-16)}" y1="${y}" y2="${y}" stroke="var(--string)" stroke-width="${1+s*.45}"/>`);
+        parts.push(`<text x="${X(10)}" y="${y+4}" font-family="var(--mono)" font-size="12" fill="var(--muted)" text-anchor="middle">${STRING_SHORT[s]}</text>`);}
+      for(let f=0;f<=F;f++){const p=pos(0,f);parts.push(`<text x="${p.x}" y="${top+5*ss+34}" font-family="var(--mono)" font-size="12" fill="var(--muted)" text-anchor="middle">${f}</text>`);}
+      this.geo={vertical,r:12.5,hit:(s,f)=>{const p=pos(s,f);const w=f===0?40:fw;return{x:p.x-w/2,y:p.y-ss/2,w,h:ss};}};
+    }else{
+      const padX=40,ss=46,nutY=46,fh=44;W=padX*2+5*ss;H=nutY+F*fh+14;
+      pos=(s,f)=>{let x=padX+(5-s)*ss;if(L)x=W-x;return{x,y:f===0?nutY-24:nutY+(f-.5)*fh};};
+      parts.push(`<rect x="${padX-18}" y="${nutY}" width="${5*ss+36}" height="${F*fh+4}" rx="4" fill="var(--wood)"/>`);
+      for(const f of [3,5,7,9,15].filter(f=>f<=F))parts.push(`<circle cx="${W/2}" cy="${nutY+(f-.5)*fh}" r="7" fill="var(--inlay)" opacity=".85"/>`);
+      if(F>=12){const y=nutY+11.5*fh;parts.push(`<circle cx="${padX+1.5*ss}" cy="${y}" r="7" fill="var(--inlay)" opacity=".85"/><circle cx="${padX+3.5*ss}" cy="${y}" r="7" fill="var(--inlay)" opacity=".85"/>`);}
+      for(let k=0;k<=F;k++){const y=nutY+k*fh;parts.push(`<line x1="${padX-18}" x2="${padX+5*ss+18}" y1="${y}" y2="${y}" stroke="${k?'var(--fret)':'var(--nut)'}" stroke-width="${k?2.5:7}"/>`);
+        if(k)parts.push(`<text x="${L?W-12:12}" y="${y-fh/2+4}" font-family="var(--mono)" font-size="12" fill="var(--muted)" text-anchor="middle">${k}</text>`);}
+      for(let s=0;s<6;s++){const x=pos(s,1).x;parts.push(`<line x1="${x}" x2="${x}" y1="${nutY-40}" y2="${nutY+F*fh+4}" stroke="var(--string)" stroke-width="${1+s*.45}"/>`);
+        parts.push(`<text x="${x}" y="${12}" font-family="var(--mono)" font-size="12" fill="var(--muted)" text-anchor="middle">${STRING_SHORT[s]}</text>`);}
+      this.geo={vertical,r:15,hit:(s,f)=>{const p=pos(s,f);const h=f===0?40:fh;return{x:p.x-ss/2,y:p.y-h/2,w:ss,h};}};
+    }
+    const col={skip:'var(--sh-skip)',wide:'var(--sh-wide)',two:'var(--sh-two)'};
+    for(const l of this.lines){const a=pos(l.a.s,l.a.f),b=pos(l.b.s,l.b.f);
+      parts.push(`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col[l.type]}" stroke-width="4" stroke-linecap="round" ${l.type==='two'?'stroke-dasharray="2 8"':''} opacity=".9"/>`);}
+    const r=this.geo.r;
+    const style={found:['var(--accent)','var(--on-accent)'],shown:['var(--dot-shown)','var(--dot-shown-ink)'],wrong:['var(--miss)','#fff'],q:['var(--sh-skip)','#2a1c17'],root:['var(--sh-skip)','#2a1c17']};
+    for(const d of this.dots){const p=pos(d.s,d.f);
+      if(d.kind==='live'){parts.push(`<circle cx="${p.x}" cy="${p.y}" r="${r+4}" fill="none" stroke="var(--hit)" stroke-width="3"/>`);continue;}
+      const [fill,ink]=style[d.kind]||style.shown;
+      parts.push(`<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${fill}" stroke="rgba(0,0,0,.35)" stroke-width="1"/>`);
+      if(d.label)parts.push(`<text x="${p.x}" y="${p.y+4.5}" font-family="var(--mono)" font-weight="700" font-size="${d.label.length>1?11:13}" fill="${ink}" text-anchor="middle">${d.label}</text>`);}
+    for(let s=0;s<6;s++)for(let f=0;f<=F;f++){const h=this.geo.hit(s,f);parts.push(`<rect class="hit" data-s="${s}" data-f="${f}" x="${h.x}" y="${h.y}" width="${h.w}" height="${h.h}"><title>${STRING_FULL[s]} string, fret ${f}</title></rect>`);}
+    svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+    svg.style.maxWidth=vertical?'380px':'none';
+    svg.innerHTML=parts.join('');
+  }
+};
+svg.addEventListener('click',e=>{const t=e.target.closest('[data-s]');if(!t)return;ex.onTap?.(+t.dataset.s,+t.dataset.f);});
+new ResizeObserver(()=>{const v=wrap.clientWidth<600;if(board.geo&&board.geo.vertical!==v)board.render();}).observe(wrap);
+
+/* ---------- Shared UI ---------- */
+const $=id=>document.getElementById(id);
+const ui={
+  prompt:h=>$('prompt').innerHTML=h,
+  controls:h=>$('controls').innerHTML=h,
+  status:(t,tone)=>{const el=$('status');el.textContent=t||'';el.className='status'+(tone?' '+tone:'');},
+  timer:{t0:0,run:false,
+    start(){this.t0=performance.now();this.run=true;$('timer').classList.add('run');this.tick();},
+    stop(){this.run=false;$('timer').classList.remove('run');const t=performance.now()-this.t0;$('timer').textContent=fmt(t);return t;},
+    reset(){this.run=false;$('timer').textContent='0.0 s';$('timer').classList.remove('run');},
+    hide(){this.run=false;$('timer').textContent='';$('timer').classList.remove('run');},
+    tick(){if(!this.run)return;$('timer').textContent=fmt(performance.now()-this.t0);requestAnimationFrame(()=>this.tick());}}
+};
+const readyPrompt=sub=>`<div class="big-note ready">Ready?</div><div class="prompt-sub">${sub}</div>`;
+const bigNote=(pc,sub)=>`<div class="big-note">${noteLabel(pc)}</div><div class="prompt-sub">${sub}</div>`;
+$('controls').addEventListener('click',e=>{const b=e.target.closest('button[data-act]');if(b)ex.onAction?.(b.dataset.act,b);});
+$('controls').addEventListener('change',e=>{const b=e.target.closest('[data-act]');if(b)ex.onAction?.(b.dataset.act,b);});
+
+/* ---------- Exercises ---------- */
+const EX={
+explore:{id:'explore',title:'Explore',tag:'Reference',
+  blurb:'Pick a note to see every place it lives and the octave shapes that link them. Tap any fret to jump to that note. With the mic on, whatever you play is ringed in green.',
+  pc:5,show:{skip:true,wide:false,two:true},live:[],
+  mount(){ui.timer.hide();this.render();ui.status('');},
+  render(){
+    const n=positionsOf(this.pc).length;
+    ui.prompt(bigNote(this.pc,`${n} places between the nut and fret ${settings.frets}`));
+    ui.controls(`<div class="chips">${ALL12.map(p=>`<button class="chip ${p===this.pc?'on':''}" data-act="pc" data-v="${p}" type="button">${SHARP[p]}</button>`).join('')}</div>
+      <div style="display:grid;gap:4px">${SHAPES.map(s=>`<label class="tog" for="sh-${s.id}"><input type="checkbox" id="sh-${s.id}" data-act="shape" data-v="${s.id}" ${this.show[s.id]?'checked':''}><span class="swatch ${s.id}"></span>${s.label}</label>`).join('')}</div>`);
+    this.draw();},
+  draw(){const pos=positionsOf(this.pc);board.set({dots:[...pos.map(p=>({...p,kind:'shown',label:SHARP[this.pc]})),...this.live],lines:octaveLinks(pos).filter(l=>this.show[l.type])});},
+  onAction(a,el){if(a==='pc'){this.pc=+el.dataset.v;this.render();}if(a==='shape'){this.show[el.dataset.v]=el.checked;this.draw();}},
+  onTap(s,f){this.pc=midiAt(s,f)%12;this.render();ui.status(`${STRING_FULL[s]} string, fret ${f} is ${noteName(midiAt(s,f))}`);},
+  onNote(m){this.live=positionsOfMidi(m).map(p=>({...p,kind:'live'}));this.draw();ui.status(`Heard ${noteName(m)}`);
+    clearTimeout(this._t);this._t=setTimeout(()=>{this.live=[];this.draw();},1600);}
+},
+tapall:{id:'tapall',title:'Find them all',tag:'On screen',
+  blurb:'Press Start and a note appears. Tap every place it lives on the neck, as fast as you can. Wrong taps count as misses. Use the shapes: find one, then jump.',
+  hint:false,state:'ready',
+  mount(){this.ready();},
+  ready(){this.state='ready';this.found=[];this.wrong=[];ui.timer.reset();
+    ui.prompt(readyPrompt('The note appears when you press Start.'));this.ctrl();board.set({dots:[]});ui.status('Press Start or the space bar when you are ready.');},
+  start(){this.pc=pickPc(this.id,this.pc);this.targets=positionsOf(this.pc);this.found=[];this.wrong=[];this.err=0;this.state='run';
+    ui.prompt(bigNote(this.pc,`Tap all ${this.targets.length}`));this.ctrl();ui.timer.start();this.draw();ui.status('Go. Start anywhere.');},
+  ctrl(){const b=this.state==='ready'?'<button class="btn primary" data-act="start" type="button">Start</button>'
+      :this.state==='done'?'<button class="btn primary" data-act="start" type="button">Start next note</button>'
+      :'<button class="btn" data-act="start" type="button">Skip to another note</button>';
+    ui.controls(b+`<label class="tog" for="tapHint"><input type="checkbox" id="tapHint" data-act="hint" ${this.hint?'checked':''}> Draw the shapes as I go</label>`);},
+  draw(){board.set({dots:[...this.found.map(p=>({...p,kind:'found',label:SHARP[this.pc]})),...this.wrong],lines:(this.hint||this.state==='done')?octaveLinks(this.found):[]});},
+  onTap(s,f){if(this.state==='ready'){ui.status('Press Start first.');return;}if(this.state!=='run')return;
+    if(this.found.some(p=>p.s===s&&p.f===f))return;const m=midiAt(s,f);
+    if(m%12===this.pc){this.found.push({s,f});if(this.found.length===this.targets.length)return this.finish();ui.status(`${this.found.length} of ${this.targets.length}`);}
+    else{this.err++;const w={s,f,kind:'wrong',label:SHARP[m%12]};this.wrong.push(w);setTimeout(()=>{this.wrong=this.wrong.filter(x=>x!==w);this.draw();},700);
+      ui.status(`That's ${noteLabel(m%12)}. Misses: ${this.err}`,'miss');}
+    this.draw();},
+  finish(){this.state='done';const t=ui.timer.stop();record(this.id,this.pc,t,this.err);this.ctrl();this.draw();
+    ui.status(`All ${this.targets.length} in ${fmt(t)}${this.err?` · ${this.err} miss${this.err>1?'es':''}`:' · no misses'}. Press space when you are ready for the next note.`,'hit');},
+  onAction(a,el){if(a==='start')this.start();if(a==='hint'){this.hint=el.checked;this.draw();}},
+  onKey(e){if((e.key===' '||e.key==='Enter')&&this.state!=='run'){e.preventDefault();this.start();}}
+},
+nameit:{id:'nameit',title:'Name the note',tag:'On screen',
+  blurb:'One fret lights up. Name the note. Ten per round, and the clock runs for each question. On a keyboard you can answer with the letters A to G.',
+  state:'ready',
+  mount(){this.state='ready';this.q=null;ui.timer.reset();
+    ui.prompt(readyPrompt('Ten frets, one at a time.'));
+    ui.controls('<button class="btn primary" data-act="again" type="button">Start round</button>');
+    board.set({dots:[]});ui.status('Press Start or the space bar when you are ready.');},
+  round(){this.state='run';this.n=0;this.ok=0;this.times=[];this.q=null;this.ask();},
+  ask(){const pc=pickPc(this.id,this.q?.pc);const ps=positionsOf(pc);const p=ps[Math.floor(Math.random()*ps.length)];
+    this.q={...p,pc};this.locked=false;ui.timer.start();
+    ui.prompt(`<div class="big-note q">?</div><div class="prompt-sub">Question ${this.n+1} of 10 · ${this.ok} right so far</div>`);
+    const pool=settings.naturals?NATURALS:ALL12;
+    ui.controls(`<div class="answers">${pool.map(p=>`<button class="chip" data-act="ans" data-v="${p}" type="button">${SHARP[p]===FLAT[p]?SHARP[p]:SHARP[p]+'<br><small>'+FLAT[p]+'</small>'}</button>`).join('')}</div>`);
+    board.set({dots:[{...p,kind:'q',label:'?'}]});ui.status('');},
+  answer(pc){if(this.state!=='run'||this.locked)return;this.locked=true;const t=ui.timer.stop();const good=pc===this.q.pc;record(this.id,this.q.pc,t,good?0:1);this.n++;
+    if(good){this.ok++;this.times.push(t);}
+    board.set({dots:[{...this.q,kind:good?'found':'wrong',label:SHARP[this.q.pc]}]});
+    ui.status(good?`Yes, ${noteLabel(this.q.pc)} · ${fmt(t)}`:`That one is ${noteLabel(this.q.pc)}`,good?'hit':'miss');
+    setTimeout(()=>{if(this.state!=='run'||ex!==this)return;this.n>=10?this.end():this.ask();},good?500:1300);},
+  end(){this.state='done';const avg=this.times.length?this.times.reduce((a,b)=>a+b)/this.times.length:0;
+    ui.prompt(`<div class="big-note">${this.ok}/10</div><div class="prompt-sub">${this.times.length?'Average '+fmt(avg)+' on the ones you got right':'Keep at it. The shapes make this faster.'}</div>`);
+    ui.controls(`<button class="btn primary" data-act="again" type="button">Start new round</button>`);ui.timer.reset();ui.status('Press space when you are ready for another round.');},
+  onAction(a,el){if(a==='ans')this.answer(+el.dataset.v);if(a==='again')this.round();},
+  onKey(e){if(this.state!=='run'){if(e.key===' '||e.key==='Enter'){e.preventDefault();this.round();}return;}
+    const i=SHARP.indexOf(e.key.toUpperCase());if(i>=0)this.answer(i);}
+},
+sweep:{id:'sweep',title:'Find it on the guitar',tag:'Guitar + mic',
+  blurb:'Play the note along two octave chains, each climbing with the skip-one-string shape: one starting on the low E string, one on the A string, lowest chain first. If the note’s first instance is an open D, G or B string, start there and follow the shape up from it first. The mic hears pitch, not which string you used, so the app assumes this path. No mic? Tap the board to stand in for the guitar. The neck runs to fret 16 here so every chain fits.',
+  frets:16,
+  state:'ready',
+  mount(){this.ready();},
+  ready(){this.state='ready';this.found=[];this.ghost=[];this.route=[];this.idx=0;ui.timer.reset();this.render();
+    ui.status('Press Start or the space bar when you are ready.');},
+  /* The route: if the note's first instance is an open D, G or B string, start there and follow the shape up (open D -> B3, open G -> e3).
+     Then two octave chains using the skip-one-string shape, the one with the lower starting fret first:
+     low E f -> D f+2 -> B f+5   and   A g -> G g+2 -> high e g+5   (start frets 0-11, so the neck runs to 16) */
+  makeRoute(pc){
+    const chain=(base,steps)=>{for(let f=0;f<=11;f++)if(midiAt(base,f)%12===pc)return steps.map(([s,d])=>({s,f:f+d}));};
+    const chains=[chain(5,[[5,0],[3,2],[1,5]]),chain(4,[[4,0],[2,2],[0,5]])].sort((x,y)=>x[0].f-y[0].f);
+    const open=[3,2,1].find(s=>OPEN[s]%12===pc);
+    const openChain={3:[{s:3,f:0},{s:1,f:3}],2:[{s:2,f:0},{s:0,f:3}],1:[{s:1,f:0}]}[open]||[];
+    return [...openChain,...chains.flat()];
+  },
+  start(){this.pc=pickPc(this.id,this.pc);this.route=this.makeRoute(this.pc);this.idx=0;this.found=[];this.err=0;this.ghost=[];this.state='run';
+    ui.timer.start();this.render();
+    const f0=this.route[0];ui.status(Mic.on?`Listening. Start on the ${STRING_FULL[f0.s]} string.`:`Mic is off. Turn it on, or tap ${SHARP[this.pc]} on the ${STRING_FULL[f0.s]} string to simulate.`);},
+  render(){
+    if(this.state==='ready'){ui.prompt(readyPrompt('The note appears when you press Start.'));}
+    else{ui.prompt(bigNote(this.pc,this.state==='done'?'Both chains complete':`${this.idx} of ${this.route.length} found`)+
+      `<div class="seq">${this.route.map((p,i)=>`<span class="${i<this.idx?'ok':i===this.idx&&this.state==='run'?'cur':''}">${i<this.idx?STRING_SHORT[p.s]+p.f:i+1}</span>`).join('')}</div>`);}
+    const btn=this.state==='ready'?'<button class="btn primary" data-act="start" type="button">Start</button>'
+      :this.state==='done'?'<button class="btn primary" data-act="start" type="button">Start next note</button>'
+      :'<button class="btn" data-act="start" type="button">Skip to another note</button>';
+    ui.controls(btn+(Mic.on?'':' <button class="btn" data-act="mic" type="button">Turn on mic</button>'));
+    board.set({dots:[...this.found.map(p=>({...p,kind:'found',label:SHARP[this.pc]})),...this.ghost],lines:this.state==='done'?octaveLinks(this.found):[]});},
+  onNote(m){if(this.state!=='run')return;const want=this.route[this.idx],wm=midiAt(want.s,want.f);
+    if(m===wm){this.found.push(want);this.idx++;this.ghost=[];
+      if(this.idx===this.route.length)return this.finish();this.render();
+      const nx=this.route[this.idx];ui.status(`Got it: ${STRING_FULL[want.s]} string, fret ${want.f}. Next: the ${STRING_FULL[nx.s]} string.`,'hit');return;}
+    this.err++;this.ghost=positionsOfMidi(m).map(p=>({...p,kind:'live'}));this.render();
+    clearTimeout(this._g);this._g=setTimeout(()=>{this.ghost=[];if(this.state==='run')this.render();},1400);
+    if(m%12===this.pc){const o=Math.round((wm-m)/12);
+      ui.status(`Right note, wrong octave. The one on the ${STRING_FULL[want.s]} string is ${Math.abs(o)} octave${Math.abs(o)>1?'s':''} ${o>0?'higher':'lower'}.`,'miss');}
+    else ui.status(`Heard ${noteName(m)}. Looking for ${SHARP[this.pc]} on the ${STRING_FULL[want.s]} string.`,'miss');},
+  onTap(s,f){if(this.state==='ready'){ui.status('Press Start first.');return;}this.onNote(midiAt(s,f));},
+  finish(){this.state='done';const t=ui.timer.stop();record(this.id,this.pc,t,this.err);this.render();
+    ui.status(`All ${this.route.length} positions in ${fmt(t)}${this.err?` · ${this.err} wrong note${this.err>1?'s':''}`:' · clean'}. Press space when you are ready for the next note.`,'hit');},
+  onAction(a,el){if(a==='start')this.start();if(a==='mic')Mic.start();},
+  onKey(e){if((e.key===' '||e.key==='Enter')&&this.state!=='run'){e.preventDefault();this.start();}},
+  onMic(){this.render();}
+}
+};
+
+
+/* ---------- Chapters: add new ones here as the course goes on ---------- */
+const CHAPTERS=[
+  {id:'octaves',book:'Book 1 · Ch. 1–4',title:'Octave shapes',
+   desc:'Every note repeats across the neck in a few fixed shapes. Learn the shapes and you can find any note on any string without counting frets.',
+   exercises:['explore','tapall','nameit','sweep']},
+  {id:'lrc',book:'Book 1 · Ch. 5–9',title:'Left / Right / Center scales',later:true},
+  {id:'key',book:'Book 2 · Ch. 1–4',title:'Basics of a key',later:true},
+  {id:'modes',book:'Book 2 · Part 2',title:'The sound of each chord',later:true},
+  {id:'triads',book:'Book 3 · Ch. 1',title:'Triads on G-B-E',later:true}
+];
+let chapter=CHAPTERS.find(c=>c.id===saved.last?.ch&&!c.later)||CHAPTERS[0];
+let ex=EX[chapter.exercises.includes(saved.last?.ex)?saved.last.ex:chapter.exercises[0]];
+
+function renderRail(){$('rail').innerHTML=CHAPTERS.map(c=>`<button class="ch ${c.id===chapter.id?'on':''} ${c.later?'later':''}" ${c.later?'disabled':''} data-ch="${c.id}" type="button"><small>${c.book}</small><b>${c.title}</b></button>`).join('');}
+$('rail').addEventListener('click',e=>{const b=e.target.closest('[data-ch]');if(!b||b.disabled)return;chapter=CHAPTERS.find(c=>c.id===b.dataset.ch);openEx(chapter.exercises[0]);});
+function renderTabs(){$('tabs').innerHTML=chapter.exercises.map(id=>`<button class="tab ${id===ex.id?'on':''}" role="tab" aria-selected="${id===ex.id}" data-ex="${id}" type="button">${EX[id].title}<em>${EX[id].tag}</em></button>`).join('');}
+$('tabs').addEventListener('click',e=>{const b=e.target.closest('[data-ex]');if(b)openEx(b.dataset.ex);});
+function openEx(id){ex=EX[id];fretLimit=ex.frets||null;renderRail();$('chTitle').textContent=chapter.title;$('chDesc').textContent=chapter.desc;renderTabs();$('blurb').textContent=ex.blurb;ex.mount();renderStats();persist();}
+document.addEventListener('keydown',e=>{if(e.target.closest('input,select,textarea'))return;if(e.target.closest('button')&&(e.key===' '||e.key==='Enter'))return;ex.onKey?.(e);});
+
+/* ---------- Progress panel ---------- */
+function renderStats(){
+  const el=$('stats');
+  if(ex.id==='explore'){el.innerHTML='<p class="small">Explore has no clock. Pick a drill to start building your times.</p>';return;}
+  const pool=settings.naturals?NATURALS:ALL12;const avgs=pool.map(p=>avgTime(ex.id,p));const known=avgs.filter(x=>x!=null);
+  if(!known.length){el.innerHTML=`<p class="small">Finish a few rounds of “${ex.title}” and your average time per note shows up here. Slow and missed notes come up more often.</p>`;return;}
+  const max=Math.max(...known),mean=known.reduce((a,b)=>a+b)/known.length;
+  const slow=pool.filter((p,i)=>avgs[i]!=null&&avgs[i]>mean*1.25);
+  el.innerHTML=`<div class="heat">${pool.map((p,i)=>`<div><div class="col ${avgs[i]==null?'none':avgs[i]>mean*1.25?'slow':''}" style="height:${avgs[i]==null?4:Math.max(6,avgs[i]/max*100)}%"></div><span>${SHARP[p]}</span></div>`).join('')}</div>
+    <div class="heat-t">${avgs.map(a=>`<span>${a==null?'–':(a/1000).toFixed(1)}</span>`).join('')}</div>
+    <p class="small">Average of your last five, in seconds. ${slow.length?'Slowest right now: '+slow.map(p=>SHARP[p]).join(', ')+'. These come up more often.':'Nice and even across the notes.'}</p>`;
+}
+
+/* ---------- Microphone + pitch detection (YIN) ---------- */
+const gateFromSlider=v=>0.05*Math.pow(0.06,v/100);   // slider 0 = least sensitive, 100 = most
+function detectPitch(buf,sr,gate){
+  let rms=0;for(let i=0;i<buf.length;i++)rms+=buf[i]*buf[i];rms=Math.sqrt(rms/buf.length);
+  if(rms<gate)return{rms};
+  const tauMin=Math.floor(sr/1400),tauMax=Math.min(Math.floor(sr/70),(buf.length>>1)-1),W=buf.length-tauMax;
+  const d=new Float32Array(tauMax+2);
+  for(let tau=1;tau<=tauMax+1;tau++){let s=0;for(let i=0;i<W;i++){const x=buf[i]-buf[i+tau];s+=x*x;}d[tau]=s;}
+  let run=0;d[0]=1;for(let tau=1;tau<=tauMax+1;tau++){run+=d[tau];d[tau]=run?d[tau]*tau/run:1;}
+  let tau=-1;for(let t=tauMin;t<=tauMax;t++){if(d[t]<0.15){while(t+1<=tauMax&&d[t+1]<d[t])t++;tau=t;break;}}
+  if(tau<1)return{rms};
+  const a=d[tau-1],b=d[tau],c=d[tau+1],den=a+c-2*b,shift=den?(a-c)/(2*den):0;
+  return{rms,freq:sr/(tau+shift)};
+}
+const Mic={on:false,hist:[],last:null,silent:0,prevRms:0,tick:0,
+  async start(){
+    try{
+      if(!navigator.mediaDevices?.getUserMedia)throw Object.assign(new Error('x'),{name:'NoMedia'});
+      this.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+      this.ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const src=this.ctx.createMediaStreamSource(this.stream);this.an=this.ctx.createAnalyser();this.an.fftSize=2048;src.connect(this.an);
+      this.buf=new Float32Array(2048);this.on=true;this.hist=[];this.last=null;this.loop();micUI();ex.onMic?.();
+    }catch(e){micUI(e);}
+  },
+  stop(){this.on=false;try{this.stream.getTracks().forEach(t=>t.stop());this.ctx.close();}catch(e){}micUI();ex.onMic?.();},
+  loop(){if(!this.on)return;requestAnimationFrame(()=>this.loop());if((this.tick=(this.tick+1)%2))return;
+    this.an.getFloatTimeDomainData(this.buf);this.frame(detectPitch(this.buf,this.ctx.sampleRate,gateFromSlider(settings.gate)));},
+  frame(r){
+    $('mLevel').style.width=Math.min(100,r.rms*600)+'%';
+    if(r.rms>this.prevRms*1.7&&r.rms>gateFromSlider(settings.gate)*2){this.last=null;this.hist=[];}  // new pluck
+    this.prevRms=r.rms;
+    if(!r.freq){this.hist=[];if(++this.silent>6)this.last=null;return;}
+    const mf=69+12*Math.log2(r.freq/440),m=Math.round(mf);
+    if(m<38||m>91){this.hist=[];return;}
+    this.silent=0;$('mNote').textContent=noteName(m);$('mCents').style.left=(50+(mf-m)*90)+'%';
+    this.hist.push(m);if(this.hist.length>4)this.hist.shift();
+    if(this.hist.length===4&&this.hist.every(x=>x===m)&&m!==this.last){this.last=m;ex.onNote?.(m);}
+  }
+};
+function micUI(err){
+  $('micPill').classList.toggle('on',Mic.on);$('micPillTxt').textContent=Mic.on?'Listening':'Mic off';
+  $('micBtn').textContent=Mic.on?'Turn off mic':'Turn on mic';$('micBtn').classList.toggle('primary',!Mic.on);
+  const msg=$('micMsg');
+  if(err){msg.className='warn';
+    msg.textContent=window.self!==window.top
+      ?'The microphone is blocked inside this viewer. Open the downloaded copy of Fretboard Lab in Chrome, Edge or Safari to play along. Tapping the board still works here.'
+      :err.name==='NotAllowedError'?'Microphone access was refused. Allow it in your browser’s site settings, then try again.'
+      :'No microphone available. Check that one is connected and that this page is opened over https or as a local file.';}
+  else{msg.className='small';msg.textContent=Mic.on?'Play single notes and let each one ring for a moment. Turn sensitivity down if the room is noisy.':'Standard tuning, A = 440 Hz. Play single notes and let each ring briefly.';
+    if(!Mic.on){$('mNote').textContent='–';$('mLevel').style.width='0%';}}
+}
+$('micBtn').onclick=()=>Mic.on?Mic.stop():Mic.start();
+$('micPill').onclick=$('micBtn').onclick;
+$('gate').value=settings.gate;$('gate').oninput=e=>{settings.gate=+e.target.value;persist();};
+
+/* ---------- Settings ---------- */
+$('setFrets').value=String(settings.frets);$('setNat').checked=settings.naturals;$('setLefty').checked=settings.lefty;
+$('setFrets').onchange=e=>{settings.frets=+e.target.value;persist();ex.mount();};
+$('setNat').onchange=e=>{settings.naturals=e.target.checked;persist();ex.mount();renderStats();};
+$('setLefty').onchange=e=>{settings.lefty=e.target.checked;persist();board.render();};
+let resetArmed=false;
+$('resetBtn').onclick=()=>{if(!resetArmed){resetArmed=true;$('resetBtn').textContent='Tap again to clear';$('resetMsg').textContent='This clears every saved time.';setTimeout(()=>{resetArmed=false;$('resetBtn').textContent='Reset times';$('resetMsg').textContent='Times are kept in this browser.';},4000);return;}
+  stats={};persist();renderStats();resetArmed=false;$('resetBtn').textContent='Reset times';$('resetMsg').textContent='Times cleared.';};
+
+openEx(ex.id);
+</script>
