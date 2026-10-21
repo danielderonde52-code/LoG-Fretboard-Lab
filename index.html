@@ -499,8 +499,8 @@ sweep:{id:'sweep',title:'Find it on the guitar',short:'On guitar',tag:'Guitar + 
   finish(){this.state='done';const t=ui.timer.stop();record(this.id,this.pc,t,this.err);this.render();
     this.result=`All ${this.route.length} positions in ${fmt(t)}${this.err?` · ${this.err} wrong note${this.err>1?'s':''}`:' · clean'}.`;
     if(settings.autoNext)this.countdown();else ui.status(this.result+' Press space when you are ready for the next note.','hit');},
-  /* After a finished note, show the result for 4 seconds, then start the next note on its own */
-  countdown(){this.cancelAuto();let n=4;const tick=()=>{if(this.state!=='done'||ex!==this){this.cancelAuto();return;}
+  /* After a finished note, show the result for 2 seconds, then start the next note on its own */
+  countdown(){this.cancelAuto();let n=2;const tick=()=>{if(this.state!=='done'||ex!==this){this.cancelAuto();return;}
       if(n===0){this.cancelAuto();this.start();return;}
       ui.status(`${this.result} Next note in ${n}…`,'hit');n--;};
     tick();this._auto=setInterval(tick,1000);},
